@@ -1,0 +1,54 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run pytest
+
+  # The regression gate. Needs the real snapshots (gitignored, never committed): fetched once and
+  # then pinned by the Actions cache so the baseline keeps describing the same data. A cache miss
+  # refetches the current release; if that differs from the baseline's snapshot the gate exits 2
+  # ("could not evaluate"), which is a prompt to refresh snapshot, golden set and baseline on
+  # purpose, not a mapper regression.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Restore pinned snapshots
+        id: snapshots
+        uses: actions/cache@v4
+        with:
+          path: data/snapshots
+          key: snapshots-v1-${{ hashFiles('scripts/fetch_data.py') }}
+      - name: Fetch snapshots (cache miss only)
+        if: steps.snapshots.outputs.cache-hit != 'true'
+        run: python3 scripts/fetch_data.py
+      - name: Golden labels exist in the snapshots
+        run: uv run pytest tests/test_golden_set.py tests/test_golden_icd.py -q -rs
+      - name: Eval gate
+        run: bash scripts/ci_gate.sh
+
+  # Invariant 4: mapping-core changes must come with eval evidence.
+  eval-evidence:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 scripts/check_eval_evidence.py "origin/${{ github.base_ref }}"
