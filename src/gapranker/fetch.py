@@ -20,6 +20,7 @@ SNAPSHOT_REQUESTS: list[tuple[str, dict[str, str]]] = [
     (f"{BASE}/Goal/List", {"includechildren": "true"}),
     (f"{BASE}/GeoArea/List", {}),
     (f"{BASE}/Series/List", {}),
+    (f"{BASE}/GeoArea/Tree", {}),  # separates aggregates from countries
 ]
 
 
