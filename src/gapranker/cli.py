@@ -9,6 +9,7 @@ from . import fetch as fetch_mod
 from . import ledger, matrix
 from . import rank as rank_mod
 from .gate import catalog_check
+from .rules import apply_malaria_free
 from .scope import sdg3_series
 
 app = typer.Typer(no_args_is_help=True, help="SDG data-gap ranker. Not an official UN product.")
@@ -65,6 +66,7 @@ def rank(
         list[str] | None, typer.Option("--slice", help="Slice id; repeat. Default: example.")
     ] = None,
     min_years: Annotated[int, typer.Option(help="Window years a value is needed in.")] = 1,
+    rules: Annotated[bool, typer.Option("--rules", help="Apply cited N/A rules.")] = False,
 ) -> None:
     """Rank missing slices by comparisons unlocked. Exit 2 if the cache fails the gate."""
     code, messages = catalog_check(CACHE)
@@ -76,6 +78,9 @@ def rank(
 
     tree = CACHE / f"{ledger.query_id(BASE + '/GeoArea/Tree', {})}.json"
     mat = matrix.build(CACHE, sdg3_series(SERIES_LIST), matrix.load_countries(tree))
+    if rules:
+        n = apply_malaria_free(mat)
+        typer.echo(f"Rules: malaria-free (WHO, 15 Jul 2025) marks {n} cells NOT_APPLICABLE.")
     bundle = list(slice_ or EXAMPLE_BUNDLE)
     unknown = [s for s in bundle if s not in mat.slices]
     if unknown:
